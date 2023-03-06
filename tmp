@@ -1,0 +1,114 @@
+import psycopg2
+import hashlib
+import getpass
+
+var_club_id = None
+var_season_id = None
+dict_players_in_club = {}
+
+if __name__ == "__main__":
+    while True:
+        display_menu()
+
+def display_menu():
+    print("Club Session Screen")
+    print("1.  Select club and season")
+    print("2.  Select players playing")
+    print("3.  Start a game")
+    print("4.  End a game")
+    print("5.  See all games played this session")
+    print("6.  See games played per player")
+    print("7.  See games played by a player")
+    print("8.  Options")
+    print("9.  Feedback")
+    print("10. Exit")
+    user_choice = None
+    while user_choice is None:
+        try:
+            user_choice = int(input("Enter a number: "))
+        except ValueError:
+            print("Invalid choice. Please enter a valid number.")
+        if user_choice == 1:
+            select_club_and_season()
+        elif user_choice == 2:
+            select_session_players()
+        elif user_choice == 3:
+            select_teams()
+        elif user_choice == 4:
+            end_game()
+        elif user_choice == 5:
+            report_session_games_played()
+        elif user_choice == 6:
+            report_session_all_players_games_played()
+        elif user_choice == 7:
+            report_session_players_games_played()
+        elif user_choice == 8:
+            menu_options()
+        elif user_choice == 9:
+            display_club_owner_details()
+        elif user_choice == 10:
+            print("Exiting program...")
+            exit()
+        else:
+            print("Invalid choice. Please try again.")
+            display_menu()
+
+def connect_to_database():
+    conn = psycopg2.connect(
+        host="localhost",
+        database="badminton",
+        user="amitsanghvi",
+        password="joy4unme"
+    )
+    return conn
+
+def hash_password(password):
+    # Hash the password for security
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def select_club_and_season():
+    global var_club_id, var_season_id, dict_players_in_club
+    conn = connect_to_database()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name FROM clubs")
+        clubs = cur.fetchall()
+        if not clubs:
+            print("No clubs found in the database.")
+            return
+        print("Select a club by entering the club ID:")
+        for club in clubs:
+            print(f"{club[0]}. {club[1]}")
+        club_id = None
+        while club_id is None:
+            try:
+                club_id = int(input("Enter a club ID: "))
+                if not any(club[0] == club_id for club in clubs):
+                    print("Invalid club ID. Please enter a valid ID.")
+                    club_id = None
+            except ValueError:
+                print("Invalid club ID. Please enter a valid ID.")
+        var_club_id = club_id
+        cur.execute("SELECT id, date_from, date_to FROM season WHERE club_id=%s ORDER BY date_from DESC", (club_id,))
+        seasons = cur.fetchall()
+        if not seasons:
+            print("No seasons found for this club in the database.")
+            return
+        print("Select a season by entering the season ID:")
+        for season in seasons:
+            print(f"{season[0]}. {season[1].strftime('%Y-%m-%d')} - {season[2].strftime('%Y-%m-%d')}")
+        season_id = None
+        while season_id is None:
+            try:
+                season_id = int(input("Enter a season ID: "))
+                if not any(season[0] == season_id for season in seasons):
+                    print("Invalid season ID. Please enter a valid ID.")
+                    season_id = None
+                else:
+                    var_season_id = season_id
+                    dict_players_in_club = get_players_in_club(cur, var_club_id)
+                    print(f"Club ID {var_club_id} and Season ID {var_season_id} selected.")
+                    display_menu()
+            except ValueError:
+                print("Invalid season ID. Please enter a valid ID.")
+
