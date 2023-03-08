@@ -1,28 +1,3 @@
-########################################################################################################
-# Import modules
-#########################################################################################################
-import psycopg2
-import datetime
-import time
-from datetime import date
-
-########################################################################################################
-# Connect to database
-########################################################################################################
-# Connect to database
-conn = psycopg2.connect(database="badminton", user="amitsanghvi", password="joy4unme", host="localhost", port="5432")
-
-
-########################################################################################################
-# Define global variables
-########################################################################################################
-var_club_id = None
-var_season_id = None
-var_session_id = None
-var_no_of_courts = None
-var_no_of_players_per_court = None
-list_players_available = {}
-dict_players_in_club = {}
 
 # For 
 def print_seperator_dash():
@@ -53,6 +28,7 @@ def display_menu_logged_in():
 
     options = ["Select your club and season",
                "Select players playing",
+               "End session for player",
                "Start a game",
                "End a game",
                "See all games played this session",
@@ -104,16 +80,18 @@ def process_menu_logged_in_choice():
                     print("---> ERROR: " + str(e))
                     print_seperator_star()
         elif choice == 3:
-            select_teams()
+            end_session_players()
         elif choice == 4:
-            end_game()
+            select_teams()
         elif choice == 5:
-            report_session_games_played()
+            end_game()
         elif choice == 6:
-            report_session_no_of_games_per_player()
+            report_session_games_played()
         elif choice == 7:
-            report_session_player_games_played()
+            report_session_no_of_games_per_player()
         elif choice == 8:
+            report_session_player_games_played()
+        elif choice == 9:
             if var_club_id in ['', None]:
                 print_seperator_star()
                 print ("---> ERROR: Select your club first")
@@ -121,11 +99,11 @@ def process_menu_logged_in_choice():
                 process_menu_logged_in_choice()
             else:
                 display_club_players(var_club_id)
-        elif choice == 9:
-            set_options()
         elif choice == 10:
-            display_club_owner_details()
+            set_options()
         elif choice == 11:
+            display_club_owner_details()
+        elif choice == 12:
             print("Exiting program...")
             break
 #        else:
@@ -276,7 +254,9 @@ def select_session_players():
     dict_players_not_already_playing = players_in_club_not_already_playing(var_club_id, var_session_id)
 
     # Get input from user and validate
-    input_str = input("Enter comma separated player IDs to add to session: ")
+    input_str = input("Enter comma separated player IDs to add to session (press enter to go back): ")
+    if not input_str:
+        return
     input_list = input_str.split(',')
     input_list = [x.strip() for x in input_list]
 
@@ -300,6 +280,7 @@ def select_session_players():
     return list_add_session_players_active
 
 
+
 def add_session_players_active(list_add_session_players_active):
     global var_session_id
     
@@ -321,6 +302,118 @@ def add_session_players_active(list_add_session_players_active):
         conn.rollback()
     finally:
         cur.close()
+
+
+
+# Get a list of players playing in today's session at present
+def end_session_players():
+    global var_session_id
+
+    # Get players playing in the session
+    players_in_session = get_active_players_in_session(var_session_id)
+
+    # Display players in the session
+    print("Players in session:")
+    for player_id, player_name in players_in_session.items():
+        print(f"{player_id}: {player_name}")
+
+    # Get input from user and validate
+    input_str = input("Enter comma separated player IDs to remove from session or press enter to go back: ")
+    if not input_str:
+        return
+    input_list = input_str.split(',')
+    input_list = [x.strip() for x in input_list]
+
+    list_remove_session_players_active = []
+
+    for player_id in input_list:
+        player_id = int(player_id)
+        if player_id in players_in_session.keys():
+            list_remove_session_players_active.append(player_id)
+        else:
+            print_seperator_star()
+            print(f"---> ERROR: Invalid input: player with ID {player_id} is not active in the session")
+            print_seperator_star()
+
+    # Remove selected players from session
+    remove_session_players_active(list_remove_session_players_active)
+
+    return list_remove_session_players_active
+
+# Function to remove a player from today's session
+def end_session_players():
+    global var_session_id
+
+    # Get input from user and validate
+    input_str = input("Enter comma separated player IDs to remove from session: ")
+    input_list = input_str.split(',')
+    input_list = [x.strip() for x in input_list]
+
+    list_remove_session_players_active = []
+
+    dict_players_in_session = get_active_players_in_session(var_session_id)
+
+    print("Players in session:")
+    for player_id, player_name in dict_players_in_session.items():
+        print(f"{player_id} - {player_name}")
+
+    if len(input_list) == 1 and input_list[0] == "":
+        return []
+
+    for player_id in input_list:
+        player_id = int(player_id)
+        if player_id in dict_players_in_session.keys():
+            list_remove_session_players_active.append(player_id)
+        else:
+            print_seperator_star()
+            print(f"---> ERROR: Invalid input: player with ID {player_id} is not active in the session")
+            print_seperator_star()
+
+    # Remove selected players from session
+    remove_session_players_active(list_remove_session_players_active)
+
+    return list_remove_session_players_active
+
+
+
+
+# Get player id's and player names for players currently playing in today's session
+def get_active_players_in_session(session_id):
+    cur = conn.cursor()
+
+    # Get the player IDs of players playing in the given session
+    cur.execute("SELECT player_id FROM sessions_players_active WHERE session_id = %s", (session_id,))
+    rows = cur.fetchall()
+    player_ids = [row[0] for row in rows]
+
+    if not player_ids:
+        return {}
+
+    # Get the names of players with the retrieved IDs
+    cur.execute("SELECT player_id, player_name FROM players WHERE player_id IN %s", (tuple(player_ids),))
+    rows = cur.fetchall()
+    players = {row[0]: row[1] for row in rows}
+
+    return players
+
+
+
+
+def remove_session_players_active(player_ids):
+    global var_session_id
+
+    # Connect to the database
+    cur = conn.cursor()
+
+    # Remove selected players from session
+    for player_id in player_ids:
+        sql = "DELETE FROM sessions_players_active WHERE player_id=%s AND session_id=%s"
+        cur.execute(sql, (player_id, var_session_id))
+
+    # Commit changes and close database connection
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 
@@ -560,14 +653,31 @@ def write_create_session(var_session_date, var_season_id, var_club_id, var_no_of
 
 
 if __name__ == "__main__":
+
+
+########################################################################################################
+# Import modules
+#########################################################################################################
     import psycopg2
-    # Connect to database
+    import datetime
+    import time
+    from datetime import date
+
+########################################################################################################
+# Connect to database
+########################################################################################################
     conn = psycopg2.connect(database="badminton", user="amitsanghvi", password="joy4unme", host="localhost", port="5432")
-    choice = None
+
+
+########################################################################################################
+# Define global variables
+########################################################################################################
     var_club_id = None
     var_season_id = None
     var_session_id = None
+    var_no_of_courts = None
+    var_no_of_players_per_court = None
+    list_players_available = {}
     dict_players_in_club = {}
-#    while True:
-#        display_menu_logged_in(1, 0)
+    choice = None
     process_menu_logged_in_choice()
