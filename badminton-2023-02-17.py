@@ -1,3 +1,51 @@
+"""
+def print_seperator_dash():
+def print_seperator_doubledash():
+def print_seperator_tilda():
+def print_seperator_star():
+
+def display_menu_logged_in():
+def process_menu_logged_in_choice():
+
+def display_clubs():
+def select_club(clubs):
+
+def display_season():
+def select_season():
+
+
+def create_session():
+def write_create_session(var_session_date, var_season_id, var_club_id, var_no_of_courts, var_no_of_players_per_court):
+def list_last_3_sessions(var_season_id):
+def check_session_has_players():
+def check_session_in_progress(season_id):
+def check_season_id():
+
+
+
+def players_in_club_not_already_playing(var_club_id, var_session_id):
+def players_in_club_already_playing(var_club_id, var_session_id):
+def get_active_players_in_session(session_id):
+
+def select_session_players():
+def deselect_session_players():
+def add_session_players_active(list_add_session_players_active):
+def remove_session_players_active(list_player_ids):
+def delete_session_players_active(list_delete_session_players_active):
+
+
+def select_teams():
+def end_game():
+def report_session_games_played():
+def report_session_no_of_games_per_player():
+def report_session_player_games_played():
+def set_options():
+def display_club_owner_details():
+def display_club_players(var_club_id):
+
+
+"""
+
 
 # For 
 def print_seperator_dash():
@@ -80,7 +128,8 @@ def process_menu_logged_in_choice():
                     print("---> ERROR: " + str(e))
                     print_seperator_star()
         elif choice == 3:
-            end_session_players()
+            deselect_session_players()
+            #end_session_players()
         elif choice == 4:
             select_teams()
         elif choice == 5:
@@ -106,10 +155,7 @@ def process_menu_logged_in_choice():
         elif choice == 12:
             print("Exiting program...")
             break
-#        else:
-#            print_seperator_star()
-#            print("---> ERROR: Invalid choice. Please try again.")
-#            print_seperator_star()
+
 
 
 ########################################################################################################
@@ -227,7 +273,7 @@ def check_session_has_players():
 
     if var_no_of_players_per_court is None:
         print_seperator_star()
-        print("---> Error: var_no_of_players_per_court is not set.")
+        print("---> ERROR: var_no_of_players_per_court is not set.")
         print_seperator_star()
         return None
 
@@ -241,14 +287,26 @@ def check_session_has_players():
         return list_players_available
     else:
         print_seperator_star()
-        print(f"---> Error: Number of players available ({len(list_players_available)}) is less than the required number of players per court ({var_no_of_players_per_court})")
+        print(f"---> ERROR: Number of players available ({len(list_players_available)}) is less than the required number of players per court ({var_no_of_players_per_court})")
         print(f"Info: More players can be added by either ending a game or selecting more players for the session")
         print_seperator_star()
         return None
 
-# Function to select players for a session
+# Function to select players to play for a session
 def select_session_players():
-    global var_session_id
+    global var_session_id, var_club_id
+
+    if not var_club_id:
+        print_seperator_star()
+        print("---> ERROR: club not selected")
+        print_seperator_star()
+        display_clubs()
+
+    if not var_session_id:
+        print_seperator_star()
+        print("---> ERROR: session not selected")
+        print_seperator_star()
+        create_session()
 
     # Get players not already playing in session
     dict_players_not_already_playing = players_in_club_not_already_playing(var_club_id, var_session_id)
@@ -281,11 +339,59 @@ def select_session_players():
 
 
 
+# Function to select players to remove from today's session 
+def deselect_session_players():
+    global var_session_id, var_club_id
+    
+    if not var_club_id:
+        print_seperator_star()
+        print("---> ERROR: club not selected")
+        print_seperator_star()
+        display_clubs()
+
+    if not var_session_id:
+        print_seperator_star()
+        print("---> ERROR: session not selected")
+        print_seperator_star()
+        create_session()
+    
+    dict_players_in_session = get_active_players_in_session(var_session_id)
+    
+    if not dict_players_in_session:
+        print("---> ERROR: no players to remove from session")
+        return
+
+    # Get input from user and validate
+    input_str = input("Enter comma separated player IDs to remove from session (press enter to go back): ")
+    if not input_str:
+        return
+    input_list = input_str.split(',')
+    input_list = [x.strip() for x in input_list]
+
+    list_remove_session_players_active = []
+
+    for player_id in input_list:
+        player_id = int(player_id)
+        if player_id in dict_players_in_session.keys():
+            list_remove_session_players_active.append(player_id)
+        else:
+            print_seperator_star()
+            print(f"---> ERROR: Invalid input: player with ID {player_id} is not available to remove from session")
+            print_seperator_star()
+
+    # Remove selected players from session
+    delete_session_players_active(list_remove_session_players_active)
+
+    return list_remove_session_players_active
+
+
+
+# Function to write the data for adding players to session 
 def add_session_players_active(list_add_session_players_active):
     global var_session_id
     
     if not list_add_session_players_active:
-        print("Error: no players to add to session")
+        print("---> ERROR: no players to add to session")
         return
 
     try:
@@ -298,99 +404,55 @@ def add_session_players_active(list_add_session_players_active):
         print(f"{len(list_add_session_players_active)} players added to session")
         print_seperator_dash()
     except Exception as e:
-        print(f"Error: {e}")
+        print_seperator_star()
+        print(f"---> ERROR: {e}")
+        print_seperator_star()
         conn.rollback()
-    finally:
-        cur.close()
+#    finally:
+#        cur.close()
 
-
-
-# Get a list of players playing in today's session at present
-def end_session_players():
+# Function to write the data for deleting players from session 
+def delete_session_players_active(list_delete_session_players_active):
     global var_session_id
-
-    # Get players playing in the session
-    players_in_session = get_active_players_in_session(var_session_id)
-
-    # Display players in the session
-    print("Players in session:")
-    for player_id, player_name in players_in_session.items():
-        print(f"{player_id}: {player_name}")
-
-    # Get input from user and validate
-    input_str = input("Enter comma separated player IDs to remove from session or press enter to go back: ")
-    if not input_str:
+    
+    if not list_delete_session_players_active:
+        print_seperator_star()
+        print("---> ERROR: no players to delete from session")
+        print_seperator_star()
         return
-    input_list = input_str.split(',')
-    input_list = [x.strip() for x in input_list]
 
-    list_remove_session_players_active = []
-
-    for player_id in input_list:
-        player_id = int(player_id)
-        if player_id in players_in_session.keys():
-            list_remove_session_players_active.append(player_id)
-        else:
-            print_seperator_star()
-            print(f"---> ERROR: Invalid input: player with ID {player_id} is not active in the session")
-            print_seperator_star()
-
-    # Remove selected players from session
-    remove_session_players_active(list_remove_session_players_active)
-
-    return list_remove_session_players_active
-
-# Function to remove a player from today's session
-def end_session_players():
-    global var_session_id
-
-    # Get input from user and validate
-    input_str = input("Enter comma separated player IDs to remove from session: ")
-    input_list = input_str.split(',')
-    input_list = [x.strip() for x in input_list]
-
-    list_remove_session_players_active = []
-
-    dict_players_in_session = get_active_players_in_session(var_session_id)
-
-    print("Players in session:")
-    for player_id, player_name in dict_players_in_session.items():
-        print(f"{player_id} - {player_name}")
-
-    if len(input_list) == 1 and input_list[0] == "":
-        return []
-
-    for player_id in input_list:
-        player_id = int(player_id)
-        if player_id in dict_players_in_session.keys():
-            list_remove_session_players_active.append(player_id)
-        else:
-            print_seperator_star()
-            print(f"---> ERROR: Invalid input: player with ID {player_id} is not active in the session")
-            print_seperator_star()
-
-    # Remove selected players from session
-    remove_session_players_active(list_remove_session_players_active)
-
-    return list_remove_session_players_active
-
-
+    try:
+        cur = conn.cursor()
+        for player_id in list_delete_session_players_active:
+            cur.execute("""DELETE FROM sessions_players_active 
+                            WHERE session_id = %s AND player_id = %s""", (var_session_id, player_id))
+        conn.commit()
+        print_seperator_dash()
+        print(f"{len(list_delete_session_players_active)} players removed from session")
+        print_seperator_dash()
+    except Exception as e:
+        print_seperator_star()
+        print(f"---> ERROR: {e}")
+        print_seperator_star()
+        conn.rollback()
+#    finally:
+#        cur.close()
 
 
 # Get player id's and player names for players currently playing in today's session
-def get_active_players_in_session(session_id):
+def get_active_players_in_session(var_session_id):
     cur = conn.cursor()
 
     # Get the player IDs of players playing in the given session
-    cur.execute("SELECT player_id FROM sessions_players_active WHERE session_id = %s", (session_id,))
+    cur.execute("SELECT player_id FROM sessions_players_active WHERE session_id = %s", (var_session_id,))
     rows = cur.fetchall()
-    player_ids = [row[0] for row in rows]
+    list_player_ids = [row[0] for row in rows]
 
-    if not player_ids:
+    if not list_player_ids:
         return {}
 
     # Get the names of players with the retrieved IDs
-    cur.execute("SELECT player_id, player_name FROM players WHERE player_id IN %s", (tuple(player_ids),))
+    cur.execute("SELECT id, name FROM players WHERE id IN %s", (tuple(list_player_ids),))
     rows = cur.fetchall()
     players = {row[0]: row[1] for row in rows}
 
@@ -398,23 +460,19 @@ def get_active_players_in_session(session_id):
 
 
 
-
-def remove_session_players_active(player_ids):
+def remove_session_players_active(list_player_ids):
     global var_session_id
 
     # Connect to the database
     cur = conn.cursor()
 
     # Remove selected players from session
-    for player_id in player_ids:
+    for player_id in list_player_ids:
         sql = "DELETE FROM sessions_players_active WHERE player_id=%s AND session_id=%s"
         cur.execute(sql, (player_id, var_session_id))
 
     # Commit changes and close database connection
     conn.commit()
-    cur.close()
-    conn.close()
-
 
 
 # Function to end a game
@@ -534,6 +592,34 @@ def players_in_club_not_already_playing(var_club_id, var_session_id):
 
     return dict_players_not_already_playing
 
+########################################################################################################
+# Accepts club and session and returns players from the club that are already playing in today's session.
+########################################################################################################
+def players_in_club_already_playing(var_club_id, var_session_id):
+    if var_club_id is None or not str(var_club_id).isnumeric():
+        raise ValueError("Invalid club ID")
+    if var_session_id is None or not str(var_session_id).isnumeric():
+        raise ValueError("Invalid session ID")
+
+    cur = conn.cursor()
+    cur.execute("""SELECT sp.player_id, p.name 
+                   FROM sessions_players_active sp
+                   INNER JOIN players p ON sp.player_id = p.id
+                   WHERE sp.session_id = %s""", (var_session_id,))
+    
+    dict_players_already_playing = {}
+    rows = cur.fetchall()
+
+    print_seperator_tilda()
+    for row in rows:
+        player_id, player_name = row
+        print("{:<4}{:<30}".format(player_id, player_name))
+        dict_players_already_playing[player_id] = player_name
+    print_seperator_tilda()
+
+    return dict_players_already_playing
+
+
 
 ########################################################################################################
 # Creates a session 
@@ -582,7 +668,7 @@ def check_season_id():
     
     if var_season_id is None or not str(var_season_id).isnumeric():
         print_seperator_star()
-        print("---> Error: Invalid season ID. Please select a season.")
+        print("---> ERROR: Invalid season ID. Please select a season.")
         print_seperator_star()
         display_clubs()
     else:
@@ -591,7 +677,7 @@ def check_season_id():
         row = cur.fetchone()
         if row is None:
             print_seperator_star()
-            print("---> Error: Season ID not found. Please select a season.")
+            print("---> ERROR: Season ID not found. Please select a season.")
             print_seperator_star()
             display_clubs()
 
@@ -653,8 +739,6 @@ def write_create_session(var_session_date, var_season_id, var_club_id, var_no_of
 
 
 if __name__ == "__main__":
-
-
 ########################################################################################################
 # Import modules
 #########################################################################################################
@@ -679,5 +763,7 @@ if __name__ == "__main__":
     var_no_of_players_per_court = None
     list_players_available = {}
     dict_players_in_club = {}
+    dict_players_not_already_playing = {}
+    dict_players_already_playing = {}
     choice = None
     process_menu_logged_in_choice()
