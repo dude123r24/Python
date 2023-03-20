@@ -108,7 +108,6 @@ def display_menu_logged_in():
         return int(choice)
 
 
-
 ########################################################################################################
 # Function to accept user input for the menu for anyone logged in
 ########################################################################################################
@@ -145,13 +144,7 @@ def process_menu_logged_in_choice():
         elif choice == 8:
             report_session_player_games_played()
         elif choice == 9:
-            if var_club_id in ['', None]:
-                print_seperator_star()
-                print ("---> ERROR: Select your club first")
-                print_seperator_star()
-                process_menu_logged_in_choice()
-            else:
-                display_club_players(var_club_id)
+            display_club_players(var_club_id)
         elif choice == 10:
             set_options()
         elif choice == 11:
@@ -178,7 +171,7 @@ def display_clubs():
     cur.execute("SELECT id, name FROM clubs ORDER BY name")
     clubs = cur.fetchall()
     for club in clubs:
-        print("{:<4}{:<30}".format(club[0], club[1]))
+        print("{:<4d} {:<30}".format(club[0], club[1]))
     print (" ")
     select_club(clubs)
     return clubs
@@ -221,7 +214,7 @@ def display_season():
     cur.execute("SELECT id, date_from, date_to FROM seasons WHERE club_id = %s ORDER BY date_from DESC", (var_club_id,))
     seasons = cur.fetchall()
     for season in seasons:
-        print("{:<4}{:<15}{:<15}".format(season[0], season[1].strftime("%Y-%m-%d"), season[2].strftime("%Y-%m-%d")))
+        print("{:<4d} {:<15}{:<15}".format(season[0], season[1].strftime("%Y-%m-%d"), season[2].strftime("%Y-%m-%d")))
     print (" ")
     select_season()
     return var_season_id
@@ -254,39 +247,138 @@ def select_season():
 
 
 ########################################################################################################
-# Function to select teams to play. It also creates a session if not already present
+# Checks we have a valid season_id 
 ########################################################################################################
-
-# Function to select teams for a game
-def select_teams():
-    global var_club_id
+def check_season_id():
     global var_season_id
-    global var_session_id
-
-    print_seperator_tilda()
-    print("Start A Game / Create Teams")
-    print_seperator_tilda()
-
-    create_session()
-    list_players_available = check_session_has_players()
-    if list_players_available is None:
-        #players_in_club_not_already_playing(var_club_id, var_session_id)
-        select_session_players()
+    
+    if var_season_id is None or not str(var_season_id).isnumeric():
+        print_seperator_star()
+        print("---> ERROR: Invalid season ID. Please select a season.")
+        print_seperator_star()
+        display_clubs()
     else:
-        print("Add code to Select teams")
-        time.sleep(2)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM seasons WHERE id = %s", (var_season_id,))
+        row = cur.fetchone()
+        if row is None:
+            print_seperator_star()
+            print("---> ERROR: Season ID not found. Please select a season.")
+            print_seperator_star()
+            display_clubs()
 
+
+########################################################################################################
+# Creates a session 
+########################################################################################################
+def create_session():
+    global var_season_id
+    global var_club_id
+    global var_session_id
+    today = date.today()
+    cur = conn.cursor()
+
+    # Check season_id is not null and is numeric
+    check_season_id()
+
+    # Check for existing session for today's date
+    var_session_id = check_session_in_progress(var_season_id)
+    if var_session_id is not None:
+        #print (" ")
+        #print_seperator_dash()
+        #print("Info: Session for today already in progress with id: {}".format(var_session_id))
+        #print_seperator_dash()
+        #print (" ")
+        return var_session_id
+
+    # Select number of courts and players per court from club_options
+    cur.execute("SELECT option_value FROM club_options WHERE club_id = %s AND option_name = 'num_courts'", (var_club_id,))
+    row = cur.fetchone()
+    if row is None:
+        raise ValueError("Could not find value for 'num_courts' in club_options")
+    var_no_of_courts = row[0]
+
+    cur.execute("SELECT option_value FROM club_options WHERE club_id = %s AND option_name = 'max_players_per_court'", (var_club_id,))
+    row = cur.fetchone()
+    if row is None:
+        raise ValueError("Could not find value for 'max_players_per_court' in club_options")
+    var_no_of_players_per_court = row[0]
+
+    # Write a new session to the sessions table
+    try:
+        cur.execute("""INSERT INTO sessions (season_id, club_id, session_date, no_of_courts, no_of_players_per_court)
+                        VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                    (var_season_id, var_club_id, today, var_no_of_courts, var_no_of_players_per_court))
+        var_session_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        print(f"Error: {e}")
+        conn.rollback()
+        raise
+
+    print("Info: Created session with session id: {}".format(var_session_id))
+    return var_session_id
+
+
+# Function to write the session details to database
+def write_create_session(var_session_date, var_season_id, var_club_id, var_no_of_courts, var_no_of_players_per_court):
+    cur = conn.cursor()
+    cur.execute("INSERT INTO sessions (season_id, club_id, session_date, no_of_courts, no_of_players_per_court) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (var_season_id, var_club_id, var_session_date, var_no_of_courts, var_no_of_players_per_court))
+    conn.commit()
+    session_id = cur.fetchone()[0]
+    var_session_id = session_id
+    return var_session_id
+
+
+########################################################################################################
+# Prints last 3 sessions for this season
+########################################################################################################
+def display_last_3_sessions(var_season_id):
+    cur = conn.cursor()
+    cur.execute("SELECT id as session_id, club_id, season_id, session_date FROM sessions WHERE season_id = %s ORDER BY session_date DESC LIMIT 3", (var_season_id,))
+    rows = cur.fetchall()
+    print_seperator_star()
+    print("Listing the last 3 sessions for this season:")
+    print("")
+    for row in rows:
+        loop_session_id, loop_club_id, loop_season_id, loop_session_date = row
+        print("Session ID: {:<4}, Club ID: {:<4}, Season ID: {:<4}, Session Date: {:<30}".format(loop_session_id, loop_club_id, loop_season_id, loop_session_date.strftime("%Y-%m-%d")))
+    print_seperator_star()
+    print("")
+
+
+
+########################################################################################################
+# Checks if a session is already in progress
+########################################################################################################
+def check_session_in_progress(season_id):
+    check_season_id()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM sessions WHERE season_id = %s AND session_date = %s", (season_id, date.today() ) )
+    row = cur.fetchone()
+    if row is not None:
+        global var_no_of_players_per_court
+        global var_no_of_courts
+        cur = conn.cursor()
+        cur.execute("SELECT option_name, option_value FROM club_options WHERE club_id = %s AND option_name IN ('max_players_per_court', 'num_courts')", (var_club_id,))
+        options = cur.fetchall()
+        for option in options:
+            if option[0] == 'max_players_per_court':
+                var_no_of_players_per_court = int(option[1])
+            elif option[0] == 'num_courts':
+                var_no_of_courts = int(option[1])
+
+        # display_last_3_sessions(var_season_id)
+
+        return row[0]
+    else:
+        return None
 
 # Function to check if there are enough players to players to select 2 teams
 def check_session_has_players():
     global var_session_id
     global var_no_of_players_per_court
-
-    if var_no_of_players_per_court is None:
-        print_seperator_star()
-        print("---> ERROR: var_no_of_players_per_court is not set.")
-        print_seperator_star()
-        return None
 
     cur = conn.cursor()
     cur.execute("SELECT player_id FROM sessions_players_active WHERE session_id = %s", (var_session_id,))
@@ -351,6 +443,97 @@ def select_session_players():
     return list_add_session_players_active
 
 
+########################################################################################################
+# Accepts club and session and returns players from the club that are not already playing in today's session.
+# The players already playing go in the table sessions_players_active
+########################################################################################################
+def players_in_club_not_already_playing(var_club_id, var_session_id):
+    if var_club_id is None or not str(var_club_id).isnumeric():
+        raise ValueError("Invalid club ID")
+    if var_session_id is None or not str(var_session_id).isnumeric():
+        raise ValueError("Invalid session ID")
+    
+    cur = conn.cursor()
+    cur.execute("""SELECT id, name 
+                   FROM players 
+                   WHERE id IN (SELECT player_id 
+                                FROM players_clubs 
+                                WHERE club_id = %s 
+                                  AND approved = true 
+                                  AND archived = false)
+                     AND id NOT IN (SELECT player_id 
+                                    FROM sessions_players_active 
+                                    WHERE session_id = %s)""", (var_club_id, var_session_id))
+    
+    dict_players_not_already_playing = {}
+    rows = cur.fetchall()
+
+    print_seperator_tilda()
+    for row in rows:
+        player_id, player_name = row
+        print("{:<4d} {:<30}".format(player_id, player_name))
+        dict_players_not_already_playing[player_id] = player_name
+    print_seperator_tilda()
+
+    return dict_players_not_already_playing
+
+
+
+# Function to write the data for adding players to session 
+def add_session_players_active(list_add_session_players_active):
+    global var_session_id
+    
+    if not list_add_session_players_active:
+        print("---> ERROR: no players to add to session")
+        return
+
+    try:
+        cur = conn.cursor()
+        for player_id in list_add_session_players_active:
+            cur.execute("""INSERT INTO sessions_players_active (session_id, player_id)
+                            VALUES (%s, %s)""", (var_session_id, player_id))
+        conn.commit()
+        print_seperator_dash()
+        print(f"{len(list_add_session_players_active)} players added to session")
+        print_seperator_dash()
+    except Exception as e:
+        print_seperator_star()
+        print(f"---> ERROR: {e}")
+        print_seperator_star()
+        conn.rollback()
+#    finally:
+#        cur.close()
+
+
+
+########################################################################################################
+# Accepts club and session and returns players from the club that are already playing in today's session.
+########################################################################################################
+def players_in_club_already_playing(var_club_id, var_session_id):
+    if var_club_id is None or not str(var_club_id).isnumeric():
+        raise ValueError("Invalid club ID")
+    if var_session_id is None or not str(var_session_id).isnumeric():
+        raise ValueError("Invalid session ID")
+
+    cur = conn.cursor()
+    cur.execute("""SELECT sp.player_id, p.name 
+                   FROM sessions_players_active sp
+                   INNER JOIN players p ON sp.player_id = p.id
+                   WHERE sp.session_id = %s""", (var_session_id,))
+    
+    dict_players_already_playing = {}
+    rows = cur.fetchall()
+
+    print_seperator_tilda()
+    for row in rows:
+        player_id, player_name = row
+        print("{:<4d} {:<30}".format(player_id, player_name))
+        dict_players_already_playing[player_id] = player_name
+    print_seperator_tilda()
+
+    return dict_players_already_playing
+
+
 # Function to select players to remove from today's session 
 def deselect_session_players():
     global var_session_id, var_club_id
@@ -399,31 +582,19 @@ def deselect_session_players():
     return list_remove_session_players_active
 
 
-
-# Function to write the data for adding players to session 
-def add_session_players_active(list_add_session_players_active):
+def remove_session_players_active(list_player_ids):
     global var_session_id
-    
-    if not list_add_session_players_active:
-        print("---> ERROR: no players to add to session")
-        return
 
-    try:
-        cur = conn.cursor()
-        for player_id in list_add_session_players_active:
-            cur.execute("""INSERT INTO sessions_players_active (session_id, player_id)
-                            VALUES (%s, %s)""", (var_session_id, player_id))
-        conn.commit()
-        print_seperator_dash()
-        print(f"{len(list_add_session_players_active)} players added to session")
-        print_seperator_dash()
-    except Exception as e:
-        print_seperator_star()
-        print(f"---> ERROR: {e}")
-        print_seperator_star()
-        conn.rollback()
-#    finally:
-#        cur.close()
+    # Connect to the database
+    cur = conn.cursor()
+
+    # Remove selected players from session
+    for player_id in list_player_ids:
+        sql = "DELETE FROM sessions_players_active WHERE player_id=%s AND session_id=%s"
+        cur.execute(sql, (player_id, var_session_id))
+
+    # Commit changes and close database connection
+    conn.commit()
 
 
 # Function to write the data for deleting players from session 
@@ -454,20 +625,125 @@ def delete_session_players_active(list_delete_session_players_active):
 #        cur.close()
 
 
-def remove_session_players_active(list_player_ids):
+########################################################################################################
+# Function to select teams to play. It also creates a session if not already present
+########################################################################################################
+# Function to select teams for a game
+def select_teams():
+    global var_club_id
+    global var_season_id
     global var_session_id
+    
+    cur = conn.cursor()
+    
+    print_seperator_tilda()
+    print("Start A Game / Create Teams")
+    print_seperator_tilda()
 
-    # Connect to the database
+    create_session()
+    
+    # Check if session has enough players, and prompt user to add more players if not
+    list_players_available = check_session_has_players()
+    if list_players_available is None:
+        select_session_players()
+        list_players_available = check_session_has_players()
+        if list_players_available is None:
+            print("Error: Insufficient players in session")
+            return
+        
+    # Get team selection algorithm from club_options table
+    cur.execute("SELECT option_value FROM club_options WHERE club_id = %s AND option_name = 'algorithm'", (var_club_id,))
+    row = cur.fetchone()
+    if row is None:
+        print("Error: Could not find value for 'algorithm' in club_options")
+        return
+    var_algorithm = row[0]
+    
+    # Select team selection function based on algorithm
+    if var_algorithm == "random":
+        var_team_function = select_team_random
+    elif var_algorithm == "rank":
+        var_team_function = select_team_rank
+    else:
+        print("Error: Invalid value for 'algorithm' in club_options")
+        return
+    
+    # Call team selection function
+    teams = var_team_function(var_session_id)
+    print("Teams selected:")
+    for i, team in enumerate(teams):
+        print("Team {}:".format(i+1))
+        for player in team:
+            print("- {}".format(player[1]))
+
+
+
+def select_team_random(var_session_id):
     cur = conn.cursor()
 
-    # Remove selected players from session
-    for player_id in list_player_ids:
-        sql = "DELETE FROM sessions_players_active WHERE player_id=%s AND session_id=%s"
-        cur.execute(sql, (player_id, var_session_id))
+    # Select team players
+    cur.execute("""
+        SELECT p1.id, p2.id
+        FROM (
+            SELECT p.id, COALESCE(games_played, 0) AS games_played, latest_game_end_time
+            FROM players p
+            LEFT JOIN (
+                SELECT player1_id AS id, COUNT(*) AS games_played, MAX(game_end_time) AS latest_game_end_time
+                FROM games
+                JOIN teams ON games.team1_id = teams.team_id OR games.team2_id = teams.team_id
+                WHERE games.session_id = %s AND games.game_end_time IS NOT NULL
+                GROUP BY player1_id
+                UNION ALL
+                SELECT player2_id AS id, COUNT(*) AS games_played, MAX(game_end_time) AS latest_game_end_time
+                FROM games
+                JOIN teams ON games.team1_id = teams.team_id OR games.team2_id = teams.team_id
+                WHERE games.session_id = %s AND games.game_end_time IS NOT NULL
+                GROUP BY player2_id
+            ) g ON p.id = g.id
+            WHERE g.games_played = (
+                SELECT MIN(games_played)
+                FROM (
+                    SELECT COALESCE(COUNT(*), 0) AS games_played
+                    FROM games
+                    JOIN teams ON games.team1_id = teams.team_id OR games.team2_id = teams.team_id
+                    WHERE games.session_id = %s AND games.game_end_time IS NOT NULL AND (teams.player1_id = p.id OR teams.player2_id = p.id)
+                    GROUP BY teams.player1_id, teams.player2_id
+                ) t
+            )
+            ORDER BY g.games_played, g.latest_game_end_time ASC
+            LIMIT 2
+        ) p
+        ORDER BY RANDOM()
+        LIMIT 1;
+    """, (var_session_id, var_session_id, var_session_id))
+    team_player1_id, team_player2_id = cur.fetchone()
 
-    # Commit changes and close database connection
-    conn.commit()
+    # Write team to teams table
+  #  cur.execute("""
+  #      INSERT INTO teams (player1_id, player2_id)
+  #      VALUES (%s, %s)
+  #      RETURNING team_id;
+  #  """, (team_player1_id, team_player2_id))
+  #  team_id = cur.fetchone()
 
+    # Write game to games table
+  #  cur.execute("""
+  #      INSERT INTO games (session_id, team1_id, team2_id, team1_score, team2_score, game_start_time)
+  #      VALUES (%s, %s, NULL, 0, 0, %s)
+  #      RETURNING id;
+  #  """, (var_session_id, team_id, datetime.now()))
+  #  var_game_id = cur.fetchone()
+
+    # Commit changes and close connection
+  #  conn.commit()
+
+    print(f"Team: {team_player1_id}, {team_player2_id}")
+
+    return var_game_id
+
+
+def select_team_rank():
+    print ("select_team_rank")
 
 # Function to end a game
 def end_game():
@@ -528,9 +804,12 @@ def display_club_owner_details():
 # Displays all approved players from the club 
 ########################################################################################################
 def display_club_players(var_club_id):
-    if var_club_id is None or not str(var_club_id).isnumeric():
-        raise ValueError("Invalid club ID")
-    
+    if var_club_id is ['', None] or not str(var_club_id).isnumeric():
+        print_seperator_star()
+        print ("---> ERROR: Select your club first")
+        print_seperator_star()
+        display_clubs()
+                
     cur = conn.cursor()
     cur.execute("""SELECT id, name 
                    FROM players 
@@ -550,204 +829,13 @@ def display_club_players(var_club_id):
 
     for row in rows:
         player_id, player_name = row
-        print("{:<4}{:<30}".format(player_id, player_name))
+        print("{:<4d} {:<30}".format(player_id, player_name))
         dict_players_in_club[player_id] = player_name
     print (" ")
 
     return dict_players_in_club
 
 
-########################################################################################################
-# Accepts club and session and returns players from the club that are not already playing in today's session.
-# The players already playing go in the table sessions_players_active
-########################################################################################################
-def players_in_club_not_already_playing(var_club_id, var_session_id):
-    if var_club_id is None or not str(var_club_id).isnumeric():
-        raise ValueError("Invalid club ID")
-    if var_session_id is None or not str(var_session_id).isnumeric():
-        raise ValueError("Invalid session ID")
-    
-    cur = conn.cursor()
-    cur.execute("""SELECT id, name 
-                   FROM players 
-                   WHERE id IN (SELECT player_id 
-                                FROM players_clubs 
-                                WHERE club_id = %s 
-                                  AND approved = true 
-                                  AND archived = false)
-                     AND id NOT IN (SELECT player_id 
-                                    FROM sessions_players_active 
-                                    WHERE session_id = %s)""", (var_club_id, var_session_id))
-    
-    dict_players_not_already_playing = {}
-    rows = cur.fetchall()
-
-    print_seperator_tilda()
-    for row in rows:
-        player_id, player_name = row
-        print("{:<4}{:<30}".format(player_id, player_name))
-        dict_players_not_already_playing[player_id] = player_name
-    print_seperator_tilda()
-
-    return dict_players_not_already_playing
-
-
-########################################################################################################
-# Accepts club and session and returns players from the club that are already playing in today's session.
-########################################################################################################
-def players_in_club_already_playing(var_club_id, var_session_id):
-    if var_club_id is None or not str(var_club_id).isnumeric():
-        raise ValueError("Invalid club ID")
-    if var_session_id is None or not str(var_session_id).isnumeric():
-        raise ValueError("Invalid session ID")
-
-    cur = conn.cursor()
-    cur.execute("""SELECT sp.player_id, p.name 
-                   FROM sessions_players_active sp
-                   INNER JOIN players p ON sp.player_id = p.id
-                   WHERE sp.session_id = %s""", (var_session_id,))
-    
-    dict_players_already_playing = {}
-    rows = cur.fetchall()
-
-    print_seperator_tilda()
-    for row in rows:
-        player_id, player_name = row
-        print("{:<4}{:<30}".format(player_id, player_name))
-        dict_players_already_playing[player_id] = player_name
-    print_seperator_tilda()
-
-    return dict_players_already_playing
-
-
-########################################################################################################
-# Creates a session 
-########################################################################################################
-def create_session():
-    global var_season_id
-    global var_club_id
-    global var_session_id
-    today = date.today()
-    cur = conn.cursor()
-
-    # Check season_id is not null and is numeric
-    check_season_id()
-
-    # Check for existing session for today's date
-    var_session_id = check_session_in_progress(var_season_id)
-    if var_session_id is not None:
-        #print (" ")
-        #print_seperator_dash()
-        #print("Info: Session for today already in progress with id: {}".format(var_session_id))
-        #print_seperator_dash()
-        #print (" ")
-        return var_session_id
-
-    # Select number of courts and players per court from club_options
-    cur.execute("SELECT option_value FROM club_options WHERE club_id = %s AND option_name = 'num_courts'", (var_club_id,))
-    row = cur.fetchone()
-    if row is None:
-        raise ValueError("Could not find value for 'num_courts' in club_options")
-    var_no_of_courts = row[0]
-
-    cur.execute("SELECT option_value FROM club_options WHERE club_id = %s AND option_name = 'max_players_per_court'", (var_club_id,))
-    row = cur.fetchone()
-    if row is None:
-        raise ValueError("Could not find value for 'max_players_per_court' in club_options")
-    var_no_of_players_per_court = row[0]
-
-    # Write a new session to the sessions table
-    try:
-        cur.execute("""INSERT INTO sessions (season_id, club_id, session_date, no_of_courts, no_of_players_per_court)
-                        VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-                    (var_season_id, var_club_id, today, var_no_of_courts, var_no_of_players_per_court))
-        var_session_id = cur.fetchone()[0]
-        conn.commit()
-    except Exception as e:
-        print(f"Error: {e}")
-        conn.rollback()
-        raise
-
-    print("Info: Created session with session id: {}".format(var_session_id))
-    return var_session_id
-
-
-
-########################################################################################################
-# Checks we have a valid season_id 
-########################################################################################################
-def check_season_id():
-    global var_season_id
-    
-    if var_season_id is None or not str(var_season_id).isnumeric():
-        print_seperator_star()
-        print("---> ERROR: Invalid season ID. Please select a season.")
-        print_seperator_star()
-        display_clubs()
-    else:
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM seasons WHERE id = %s", (var_season_id,))
-        row = cur.fetchone()
-        if row is None:
-            print_seperator_star()
-            print("---> ERROR: Season ID not found. Please select a season.")
-            print_seperator_star()
-            display_clubs()
-
-
-########################################################################################################
-# Checks if a session is already in progress
-########################################################################################################
-def check_session_in_progress(season_id):
-    check_season_id()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM sessions WHERE season_id = %s AND session_date = %s", (season_id, date.today() ) )
-    row = cur.fetchone()
-    if row is not None:
-        global var_no_of_players_per_court
-        global var_no_of_courts
-        cur = conn.cursor()
-        cur.execute("SELECT option_name, option_value FROM club_options WHERE club_id = %s AND option_name IN ('max_players_per_court', 'num_courts')", (var_club_id,))
-        options = cur.fetchall()
-        for option in options:
-            if option[0] == 'max_players_per_court':
-                var_no_of_players_per_court = int(option[1])
-            elif option[0] == 'num_courts':
-                var_no_of_courts = int(option[1])
-
-        # display_last_3_sessions(var_season_id)
-
-        return row[0]
-    else:
-        return None
-
-
-########################################################################################################
-# Prints last 3 sessions for this season
-########################################################################################################
-def display_last_3_sessions(var_season_id):
-    cur = conn.cursor()
-    cur.execute("SELECT id as session_id, club_id, season_id, session_date FROM sessions WHERE season_id = %s ORDER BY session_date DESC LIMIT 3", (var_season_id,))
-    rows = cur.fetchall()
-    print_seperator_star()
-    print("Listing the last 3 sessions for this season:")
-    print("")
-    for row in rows:
-        loop_session_id, loop_club_id, loop_season_id, loop_session_date = row
-        print("Session ID: {:<4}, Club ID: {:<4}, Season ID: {:<4}, Session Date: {:<30}".format(loop_session_id, loop_club_id, loop_season_id, loop_session_date.strftime("%Y-%m-%d")))
-    print_seperator_star()
-    print("")
-
-
-# Function to write the session details to database
-def write_create_session(var_session_date, var_season_id, var_club_id, var_no_of_courts, var_no_of_players_per_court):
-    cur = conn.cursor()
-    cur.execute("INSERT INTO sessions (season_id, club_id, session_date, no_of_courts, no_of_players_per_court) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (var_season_id, var_club_id, var_session_date, var_no_of_courts, var_no_of_players_per_court))
-    conn.commit()
-    session_id = cur.fetchone()[0]
-    var_session_id = session_id
-    return var_session_id
 
 
 

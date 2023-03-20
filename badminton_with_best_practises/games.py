@@ -94,6 +94,7 @@ def select_teams_random(club_id, session_id):
             team2_id = cur.fetchone()[0]
             conn.commit()
     
+    print (" ")
     print_seperator_star()
     print(f"Session ID: {session_id}")
     print(f"Team 1: {player1[1]} and {player2[1]} (Team ID: {team1_id})")
