@@ -1,7 +1,7 @@
 # main.py
 import os
 from clubs import display_clubs, set_club
-from sessions import create_session, select_session_players, check_session_has_players
+from sessions import create_session, sessions_players_select, check_session_has_players
 from players import display_club_players
 from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, report_session_player_games_played, set_options, display_club_owner_details
 from utils import print_seperator_tilda
@@ -28,7 +28,7 @@ def main():
             continue
 
         session_id = create_session(club_id)
-        players = display_club_players(club_id)
+        # players = display_club_players(club_id)
 
         while True:
             print (" ")

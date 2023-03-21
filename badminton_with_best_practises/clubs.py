@@ -1,6 +1,6 @@
 # clubs.py
 from db import get_connection, get_cursor
-from utils import print_seperator_tilda
+from utils import print_seperator_tilda, print_error
 
 def display_clubs():
     with get_connection() as conn:
@@ -24,6 +24,6 @@ def set_club(club_id):
             if club_name:
                 return club_name[0]
             else:
-                print("Invalid club ID.")
+                print_error("Invalid club ID.")
                 return None
 
