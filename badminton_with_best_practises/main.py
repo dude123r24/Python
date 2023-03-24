@@ -1,14 +1,30 @@
 # main.py
+
 import os
-from clubs import display_clubs, set_club
+import sys
+from login import login
+from clubs import display_clubs, set_club, display_club_owner_details
+from seasons import get_season, create_new_season
 from sessions import create_session, sessions_players_select, check_session_has_players
-from players import display_club_players
-from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, report_session_player_games_played, set_options, display_club_owner_details
-from utils import print_seperator_tilda
+from players import display_club_players, display_club_players_not_playing_today, display_club_players_playing_today
+from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, report_session_player_games_played, set_options
+from utils import print_seperator_tilda, print_title
 
 def main():
     os.system('clear')
 
+    # Login
+    while True:
+        print_title ("Login")
+        player_id = login()
+        if player_id is None:
+            choice = input("Press 0 to exit, any other key to try again: ")
+            if choice == '0':
+                sys.exit()
+        else:
+            break
+
+    # Set club
     while True:
         display_clubs()
         club_input = input("Enter club ID (Press enter to exit): ")
@@ -27,13 +43,15 @@ def main():
             print("Club not found. Please enter a valid club ID.")
             continue
 
-        session_id = create_session(club_id)
-        # players = display_club_players(club_id)
+        # Get active season for club
+        season_id = get_season(club_id)
 
+        # Create session
+        session_id = create_session(club_id)
+
+        # Show menu
         while True:
-            print (" ")
-            print_seperator_tilda()
-            print("Menu:")
+            print_title("Menu:")
             print("1. Select players playing today")
             print("2. Select teams")
             print("3. End game")
@@ -50,11 +68,11 @@ def main():
                 continue
 
             if choice == 1:
-                sessions_players_select(club_id, session_id)
+                sessions_players_select(club_id, season_id, session_id)
             elif choice == 2:
-                select_teams(club_id, session_id)
+                select_teams(club_id, season_id, session_id)
             elif choice == 3:
-                end_game()
+                end_game(club_id, season_id, session_id)
             elif choice == 4:
                 report_session_games_played(club_id, session_id)
             elif choice == 5:
@@ -66,7 +84,7 @@ def main():
             elif choice == 8:
                 display_club_owner_details(club_id, session_id)
             elif choice == 0:
-                break
+                sys.exit()
             else:
                 print("Invalid choice")
 

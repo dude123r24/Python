@@ -2,12 +2,15 @@
 
 # Add other import statements here as needed
 
+import random
+from datetime import datetime
 from db import get_connection, get_cursor
-from utils import print_seperator_tilda, print_seperator_star
+from utils import print_seperator_tilda, print_seperator_star, print_error, print_info
+from players import get_player_name, display_player_stats, update_player_stats
+from sessions import get_session_id
 
-# Add other functions here as needed
 
-def select_teams(club_id, session_id):
+def select_teams(club_id, season_id, session_id):
     with get_connection() as conn:
         with get_cursor(conn) as cur:
             # Fetch the algorithm option from club_options table
@@ -31,9 +34,7 @@ def select_teams(club_id, session_id):
                 print("Invalid algorithm option. Please set a valid algorithm for this club.")
                 return
 
-import random
-from db import get_connection, get_cursor
-from utils import print_seperator_tilda
+
 
 def select_teams_random(club_id, session_id):
     with get_connection() as conn:
@@ -116,13 +117,187 @@ def select_teams_random(club_id, session_id):
 
 
 
-def select_teams_levels(club_id, session_id):
+def select_teams_levels(club_id, season_id, session_id):
     # Add logic for team selection based on levels
     pass
 
 
-def end_game():
-    pass
+def end_game(club_id: int, season_id: int, session_id: int):
+    session_id = get_session_id(club_id, season_id)
+    print(f"Club ID: {club_id}, Season ID: {season_id}, Session_ID: {session_id}")
+
+    games = get_ongoing_games(session_id)
+
+    if not games:
+        print("No games in progress.")
+        return
+
+    # print_info("Ongoing Games")
+    # print("{:<10} {:<20} {:<20} {:<20} {:<30}".format("Game ID", "Team 1", "Team 2", "Game Start Time", "Game End Time"))
+    # g.id, t1.player1_id, p1.name, t1.player2_id, p2.name, t2.player1_id, p3.name, t2.player2_id, p4.name, g.game_start_time
+
+    # for game in games:
+    #     team1 = get_team(game[0])
+    #     team2 = get_team(game[0])
+    #     print("{:<10} {:<20} {:<20} {:<20} {:<30}".format(game[0], f"{team1[0][1]}, {team1[1][1]}", f"{team2[0][1]}, {team2[1][1]}", game[4], game[5] # if game[5] else ""))
+
+    while True:
+        game_id = input("Enter Game ID to end game (Press 0 to exit): ")
+
+        if game_id == '0':
+            print("Exiting now.")
+            break
+
+        try:
+            game_id = int(game_id)
+        except ValueError:
+            print_error("Invalid input. Please enter a number.")
+            continue
+
+        game = next((g for g in games if g[0] == game_id), None)
+        if not game:
+            print_error("Invalid Game ID. Please enter a valid Game ID.")
+            continue
+
+        team1_score = input("Enter team 1 score: ")
+        team2_score = input("Enter team 2 score: ")
+
+        try:
+            team1_score = int(team1_score)
+            team2_score = int(team2_score)
+        except ValueError:
+            print_error("Invalid input. Please enter a number.")
+            continue
+
+        if team1_score > team2_score:
+            winning_team = game[10]
+            losing_team = game[11]
+        elif team1_score < team2_score:
+            winning_team = game[11]
+            losing_team = game[10]
+        else:
+            winning_team = None
+            losing_team = None
+
+
+        game_end_time = datetime.now()
+
+        with get_connection() as conn:
+            with get_cursor(conn) as cur:
+                try:
+                    cur.execute("""UPDATE games
+                                    SET team1_score = %s, team2_score = %s, game_end_time = %s
+                                    WHERE id = %s""",
+                                (team1_score, team2_score, game_end_time, game_id))
+
+                    if winning_team:
+                        for player_id in get_team_player_ids(winning_team):
+                            update_player_stats(player_id, 'win')
+                        for player_id in get_team_player_ids(losing_team):
+                            update_player_stats(player_id, 'lose')
+                    else:
+                        for player_id in get_team_player_ids(game[2]) + get_team_player_ids(game[3]):
+                            update_player_stats(player_id, 'draw')
+
+                except Exception as e:
+                    print(f"Error: could not end game: {e}")
+                    conn.rollback()
+                else:
+                    conn.commit()
+                    print("Game ended successfully.")
+                    break
+
+
+def get_team(team_id):
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute("""SELECT team1.player1_id, player1.name, team1.player2_id, player2.name
+                            FROM teams AS team1
+                            INNER JOIN players AS player1 ON team1.player1_id = player1.id
+                            INNER JOIN players AS player2 ON team1.player2_id = player2.id
+                            WHERE team1.id = %s""",
+                        (team_id,))
+            team1 = cur.fetchall()
+            if not team1:
+                return None
+            
+            return team1
+
+
+
+def get_team_player_ids(team_id):
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute("""SELECT player1_id, player2_id FROM teams WHERE team_id = %s""", (team_id,))
+            result = cur.fetchone()
+            return result
+
+
+def update_player_stats(player_id: int, result: str):
+    if result not in ['win', 'lose']:
+        print_error("Cannot update player stats. Result should be 'win' or 'lose'.")
+        return
+    
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            try:
+                if result == 'win':
+                    cur.execute("""UPDATE players
+                                    SET played = played + 1, won = won + 1
+                                    WHERE id = %s""",
+                                (player_id,))
+                if result == 'win':
+                    cur.execute("""UPDATE players
+                                    SET win_percentage = 100 * won / played
+                                    WHERE id = %s""",
+                                (player_id,))
+                elif result == 'lose':
+                    cur.execute("""UPDATE players
+                                    SET played = played + 1
+                                    WHERE id = %s""",
+                                (player_id,))
+                    cur.execute("""UPDATE players
+                                    SET win_percentage = 100 * won / played
+                                    WHERE id = %s""",
+                                (player_id,))
+
+            except Exception as e:
+                print_error(f"Could not update player stats: {e}")
+                conn.rollback()
+            else:
+                conn.commit()
+                print(f"Player stats for player id {player_id} updated successfully.")
+
+
+
+
+def get_ongoing_games(session_id):
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+
+            cur.execute("""SELECT 
+                                  g.id, t1.player1_id, p1.name, t1.player2_id, p2.name, t2.player1_id, p3.name, t2.player2_id, p4.name, g.game_start_time, g.team1_id , g.team2_id
+                           FROM games g
+                                  JOIN teams t1 ON g.team1_id = t1.team_id
+                                  JOIN players p1 ON p1.id = t1.player1_id
+                                  JOIN players p2 ON p2.id = t1.player2_id
+                                  JOIN teams t2 ON g.team2_id = t2.team_id
+                                  JOIN players p3 ON p3.id = t2.player1_id
+                                  JOIN players p4 ON p4.id = t2.player2_id
+                            WHERE 
+                                  g.session_id = %s AND g.game_end_time IS NULL
+                            ORDER BY g.game_start_time;""",
+                        (session_id,))
+            games = cur.fetchall()
+
+            print_info("Ongoing Games")
+            for game in games:
+# print("{:<10} {:<20} {:<20} {:<20} {:<30}".format(game[0], f"{team1[0][1]}, {team1[1][1]}", f"{team2[0][1]}, {team2[1][1]}", game[4], game[5]
+
+                print(f"{game[0]}. -- Team 1: {game[2]}, {game[4]} .. VS .. Team 2: {game[6]}, {game[8]} | Start Time: {game[9]}")
+            print_seperator_tilda()
+            print(" ")
+            return games
 
 def report_session_games_played(club_id, session_id):
     pass
@@ -135,23 +310,4 @@ def report_session_player_games_played(club_id, session_id):
 
 def set_options(club_id, session_id):
     pass
-
-def display_club_owner_details(club_id, session_id):
-    with get_connection() as conn:
-        with get_cursor(conn) as cur:
-            cur.execute("""SELECT p.id, p.name, p.email, p.phone
-                           FROM players p
-                           JOIN clubs c ON p.id = c.created_by
-                           WHERE c.id = %s""", (club_id,))
-            owner_details = cur.fetchone()
-
-            if owner_details:
-                print_seperator_tilda()
-                print("Club Owner Details")
-                print("ID:", owner_details[0])
-                print("Name:", owner_details[1])
-                print("Email:", owner_details[2])
-                print("Phone:", owner_details[3])
-            else:
-                print("No owner details found for the club.")
 
