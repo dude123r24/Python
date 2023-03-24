@@ -1,0 +1,186 @@
+def end_game(club_id, season_id, session_id):
+    session_id = get_session_id(club_id, season_id)
+    print (f"Club ID: {club_id} , Season ID: {season_id}, Session_ID: {session_id}")
+
+    games = get_ongoing_games(session_id)
+
+    if not games:
+        print("No games in progress.")
+        return
+
+    print_seperator_tilda()
+    print("Ongoing Games:")
+    print("{:<10} {:<20} {:<20} {:<20} {:<30}".format("Game ID", "Team 1", "Team 2", "Game Start Time", "Game End Time"))
+    for game in games:
+        team1 = get_team(game[2])
+        team2 = get_team(game[3])
+        print("{:<10} {:<20} {:<20} {:<20} {:<30}".format(game[0], f"{team1[0][1]}, {team1[1][1]}", f"{team2[0][1]}, {team2[1][1]}", game[4], game[5] if game[5] else ""))
+
+    while True:
+        game_id = input("Enter Game ID to end game (Press 0 to exit): ")
+
+        if game_id == '0':
+            print("Exiting now.")
+            break
+
+        try:
+            game_id = int(game_id)
+        except ValueError:
+            print_error("Invalid input. Please enter a number.")
+            continue
+
+        game = next((g for g in games if g[0] == game_id), None)
+        if not game:
+            print_error("Invalid Game ID. Please enter a valid Game ID.")
+            continue
+
+        team1_score = input("Enter team 1 score: ")
+        team2_score = input("Enter team 2 score: ")
+
+        try:
+            team1_score = int(team1_score)
+            team2_score = int(team2_score)
+        except ValueError:
+            print_error("Invalid input. Please enter a number.")
+            continue
+
+        if team1_score > team2_score:
+            winning_team = game[2]
+            losing_team = game[3]
+        elif team1_score < team2_score:
+            winning_team = game[3]
+            losing_team = game[2]
+        else:
+            winning_team = None
+            losing_team = None
+
+        game_end_time = datetime.now()
+
+        with get_connection() as conn:
+            with get_cursor(conn) as cur:
+                try:
+                    cur.execute("""UPDATE games
+                                   SET team1_score = %s, team2_score = %s, game_end_time = %s
+                                   WHERE id = %s""",
+                                (team1_score, team2_score, game_end_time, game_id))
+
+                    # Update player stats
+                    if winning_team:
+                        for player_id in get_team_player_ids(winning_team):
+                            update_player_stats(player_id, 1, 1)
+                        for player_id in get_team_player_ids(losing_team):
+                            update_player_stats(player_id, 1, 0)
+                    else:
+                        for player_id in get_team_player_ids(game[2]) + get_team_player_ids(game[3]):
+                            update_player_stats(player_id, 1, 0.5)
+
+                except Exception as e:
+                    print(f"Error: could not end game: {e}")
+                    conn.rollback()
+                else:
+                    conn.commit()
+                    print("Game ended successfully.")
+                    break
+
+
+
+
+def end_game():
+    # Get ongoing games
+    games = get_ongoing_games()
+
+    # Display ongoing games
+    print (" ")
+    print_seperator_tilda()
+    print("Ongoing Games:")
+    for game in games:
+        team1_player1 = get_player_name(game[2])
+        team1_player2 = get_player_name(game[3])
+        team2_player1 = get_player_name(game[4])
+        team2_player2 = get_player_name(game[5])
+        print(f"{game[0]}. Team 1 ({team1_player1}, {team1_player2}) vs Team 2 ({team2_player1}, {team2_player2}) - {game[6]}")
+
+    # Select a game to end
+    while True:
+        game_id = input("Enter game ID to end (Press enter to cancel): ")
+
+        if not game_id:
+            return
+
+        try:
+            game_id = int(game_id)
+        except ValueError:
+            print_error("Invalid input. Please enter a valid game ID.")
+            continue
+
+        game = next((game for game in games if game[0] == game_id), None)
+        if not game:
+            print_error("Game not found. Please enter a valid game ID.")
+            continue
+        else:
+            break
+
+    # Get scores
+    while True:
+        team1_score = input("Enter Team 1 score: ")
+        team2_score = input("Enter Team 2 score: ")
+
+        try:
+            team1_score = int(team1_score)
+            team2_score = int(team2_score)
+        except ValueError:
+            print_error("Invalid input. Please enter valid scores.")
+            continue
+
+        if team1_score == team2_score:
+            print_error("Match cannot be a draw. Please enter valid scores.")
+            continue
+        else:
+            break
+
+    # End the game
+    game_end_time = datetime.now()
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute("""UPDATE games SET team1_score = %s, team2_score = %s, game_end_time = %s
+                           WHERE id = %s""",
+                        (team1_score, team2_score, game_end_time, game_id))
+            conn.commit()
+
+    # Update player stats
+    team1_players = [game[2], game[3]]
+    team2_players = [game[4], game[5]]
+    winning_team = 1 if team1_score > team2_score else 2
+    losing_team = 2 if team1_score > team2_score else 1
+
+    # Update winning team players' stats
+    for player_id in team1_players if winning_team == 1 else team2_players:
+        update_player_stats(player_id, True, True)
+
+    # Update losing team players' stats
+    for player_id in team1_players if losing_team == 1 else team2_players:
+        update_player_stats(player_id, True, False)
+
+    # Display updated stats
+    print("Game ended. Player stats updated.")
+    for player_id in team1_players:
+        display_player_stats(player_id)
+    for player_id in team2_players:
+        display_player_stats(player_id)
+
+
+
+
+
+            cur.execute("""SELECT g.id, 
+                                  CONCAT(p1.name, ' & ', p2.name) AS team1, 
+                                  CONCAT(p3.name, ' & ', p4.name) AS team2, 
+                                  g.game_start_time 
+                           FROM games g
+                           JOIN players p1 ON p1.id = g.team1_member1_id
+                           JOIN players p2 ON p2.id = g.team1_member2_id
+                           JOIN players p3 ON p3.id = g.team2_member1_id
+                           JOIN players p4 ON p4.id = g.team2_member2_id
+                           WHERE g.session_id = %s AND g.game_end_time IS NULL
+                           ORDER BY g.game_start_time""",
+                        (session_id,))
