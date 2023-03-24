@@ -7,7 +7,7 @@ from clubs import display_clubs, set_club, display_club_owner_details
 from seasons import get_season, create_new_season
 from sessions import create_session, sessions_players_select, check_session_has_players
 from players import display_club_players, display_club_players_not_playing_today, display_club_players_playing_today
-from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, report_session_player_games_played, set_options
+from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, set_options
 from utils import print_seperator_tilda, print_title
 
 def main():
@@ -52,8 +52,8 @@ def main():
         # Show menu
         while True:
             print_title("Menu:")
-            print("1. Select players playing today")
-            print("2. Select teams")
+            print("1. Select/View players playing today")
+            print("2. Start game")
             print("3. End game")
             print("4. Report games played in session")
             print("5. Report number of games played by each player")
@@ -76,11 +76,11 @@ def main():
             elif choice == 4:
                 report_session_games_played(club_id, session_id)
             elif choice == 5:
-                report_session_no_of_games_per_player(club_id, session_id)
+                report_session_no_of_games_per_player(club_id, season_id, session_id)
             elif choice == 6:
                 report_session_player_games_played(club_id, session_id)
             elif choice == 7:
-                set_options(club_id, session_id)
+                set_options(club_id)
             elif choice == 8:
                 display_club_owner_details(club_id, session_id)
             elif choice == 0:

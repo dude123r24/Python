@@ -122,3 +122,5 @@ def display_player_stats(player_id):
             print(f"Win percentage: {player[4]}%")
             print_seperator_tilda()
             print (" ")
+
+

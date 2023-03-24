@@ -3,7 +3,7 @@
 # Add other import statements here as needed
 
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from db import get_connection, get_cursor
 from utils import print_seperator_tilda, print_seperator_star, print_error, print_info
 from players import get_player_name, display_player_stats, update_player_stats
@@ -186,9 +186,10 @@ def end_game(club_id: int, season_id: int, session_id: int):
             with get_cursor(conn) as cur:
                 try:
                     cur.execute("""UPDATE games
-                                    SET team1_score = %s, team2_score = %s, game_end_time = %s
+                                    SET team1_score = %s, team2_score = %s, winner_team_id = %s,
+                                        game_end_time = %s
                                     WHERE id = %s""",
-                                (team1_score, team2_score, game_end_time, game_id))
+                                (team1_score, team2_score, winning_team, game_end_time, game_id))
 
                     if winning_team:
                         for player_id in get_team_player_ids(winning_team):
@@ -302,12 +303,41 @@ def get_ongoing_games(session_id):
 def report_session_games_played(club_id, session_id):
     pass
 
-def report_session_no_of_games_per_player(club_id, session_id):
+def set_options(club_id):
     pass
 
-def report_session_player_games_played(club_id, session_id):
-    pass
 
-def set_options(club_id, session_id):
-    pass
+def report_session_no_of_games_per_player(club_id, season_id, session_id):
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            # Get all players who played in the given session
+            cur.execute("""SELECT DISTINCT players.id, players.name
+                           FROM sessions_players
+                           JOIN players ON sessions_players.player_id = players.id
+                           WHERE session_id = %s""", (session_id,))
+            players = cur.fetchall()
 
+            # For each player, get the number of games played, won and lost in the given session
+            for player in players:
+                cur.execute("""SELECT COUNT(*) as total_games_played, 
+                                        COUNT(CASE WHEN winner_team_id IS NOT NULL AND 
+                                                       (winner_team_id = team1_id AND t1.player1_id = %s OR t1.player2_id = %s OR 
+                                                        winner_team_id = team2_id AND t2.player1_id = %s OR t2.player2_id = %s)
+                                                   THEN 1 END) as total_games_won,
+                                        COUNT(CASE WHEN winner_team_id IS NOT NULL AND 
+                                                       (winner_team_id = team1_id AND t1.player1_id = %s OR t1.player2_id = %s OR 
+                                                        winner_team_id = team2_id AND t2.player1_id = %s OR t2.player2_id = %s)
+                                                   THEN 1 END) as total_games_lost,
+                                        MAX(game_end_time) as last_game_played
+                                FROM games
+                                JOIN teams AS t1 ON games.team1_id = t1.team_id
+                                JOIN teams AS t2 ON games.team2_id = t2.team_id
+                                WHERE games.session_id = %s""",
+                            (player[0], player[0], player[0], player[0], player[0], player[0], player[0], player[0], session_id))
+                games_info = cur.fetchone()
+
+                print(f"Player: {player[1]}")
+                print(f"Total games played: {games_info[0]}")
+                print(f"Total games won: {games_info[1]}")
+                print(f"Total games lost: {games_info[2]}")
+                print(f"Last game played: {games_info[3]}")
