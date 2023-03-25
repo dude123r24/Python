@@ -14,6 +14,23 @@ from sessions import get_session_id, get_games_played_last_session_id
 def select_teams(club_id, season_id, session_id):
     with get_connection() as conn:
         with get_cursor(conn) as cur:
+            # Check if there are enough players for a game
+            cur.execute("""SELECT COUNT(*)
+                           FROM sessions_players
+                           WHERE session_id = %s and active='Y' """,
+                        (session_id,))
+            num_players = cur.fetchone()[0]
+
+            cur.execute("""SELECT option_value
+                           FROM club_options
+                           WHERE club_id = %s AND option_name = 'max_players_per_court'""",
+                        (club_id,))
+            max_players_per_court = cur.fetchone()[0]
+
+            if num_players < int(max_players_per_court):
+                print_error(f"Not enough players ({num_players}/{max_players_per_court}) for a game in this session ({session_id}).")
+                return
+
             # Fetch the algorithm option from club_options table
             cur.execute("""SELECT option_value
                            FROM club_options
@@ -37,13 +54,17 @@ def select_teams(club_id, season_id, session_id):
 
 
 
+
 def select_teams_random(club_id, session_id):
     with get_connection() as conn:
         with get_cursor(conn) as cur:
             cur.execute("""SELECT players.id, players.name
                            FROM players
                            JOIN players_clubs ON players_clubs.player_id = players.id
+                           JOIN sessions_players ON sessions_players.player_id = players.id
                            WHERE players_clubs.club_id = %s
+                             AND sessions_players.session_id = %s
+                             AND sessions_players.active = 'Y'
                              AND players.id NOT IN (
                                SELECT team1.player1_id FROM games
                                JOIN teams AS team1 ON games.team1_id = team1.team_id
@@ -61,7 +82,7 @@ def select_teams_random(club_id, session_id):
                                JOIN teams AS team2 ON games.team2_id = team2.team_id
                                WHERE games.session_id = %s AND games.game_end_time IS NULL
                              )""",
-                        (club_id, session_id, session_id, session_id, session_id))
+                        (club_id, session_id, session_id, session_id, session_id, session_id))
             available_players = cur.fetchall()
 
     if len(available_players) < 2:
