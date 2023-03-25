@@ -1,1 +1,3 @@
-- We can start game without selecting players for the session at present. That cannot happen.
+1) We can start game without selecting players for the session at present. That cannot happen. Function select_teams - CORRECTED
+2) We are selected the players from the players team. It should be from sessions_players table. Function select_teams_random - CORRECTED
+3) We dont look at how many players are available to play before starting a game. Function select_teams - CORRECTED
