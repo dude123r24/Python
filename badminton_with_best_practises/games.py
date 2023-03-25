@@ -3,11 +3,12 @@
 # Add other import statements here as needed
 
 import random
+from tabulate import tabulate
 from datetime import datetime, timedelta
 from db import get_connection, get_cursor
 from utils import print_seperator_tilda, print_seperator_star, print_error, print_info
 from players import get_player_name, display_player_stats, update_player_stats
-from sessions import get_session_id
+from sessions import get_session_id, get_games_played_last_session_id
 
 
 def select_teams(club_id, season_id, session_id):
@@ -307,37 +308,42 @@ def set_options(club_id):
     pass
 
 
-def report_session_no_of_games_per_player(club_id, season_id, session_id):
+
+def report_session_no_of_games_per_player(club_id, season_id):
+    session_id = input("Enter session ID (leave blank to get last session ID): ").strip()
+
+    if not session_id:
+        session_id = get_games_played_last_session_id(club_id)
+    else:
+        with get_connection() as conn:
+            with get_cursor(conn) as cur:
+                cur.execute("""
+                    SELECT id FROM sessions
+                    WHERE club_id = %s AND season_id = %s AND id = %s
+                """, (club_id, season_id, session_id))
+                if not cur.fetchone():
+                    print_error(f"No games were played for this session ({session_id}) for this club.")
+                    return
+
     with get_connection() as conn:
         with get_cursor(conn) as cur:
-            # Get all players who played in the given session
-            cur.execute("""SELECT DISTINCT players.id, players.name
-                           FROM sessions_players
-                           JOIN players ON sessions_players.player_id = players.id
-                           WHERE session_id = %s""", (session_id,))
-            players = cur.fetchall()
+            # Get player session stats for the selected session_id
+            cur.execute("""SELECT player_name, num_games_played, wins, losses, ROUND(win_percentage,0), minutes_since_last_game, session_rank
+                           FROM player_session_stats
+                           WHERE club_id = %s AND season_id = %s AND session_id = %s""",
+                        (club_id, season_id, session_id,))
+            player_stats = cur.fetchall()
 
-            # For each player, get the number of games played, won and lost in the given session
-            for player in players:
-                cur.execute("""SELECT COUNT(*) as total_games_played, 
-                                        COUNT(CASE WHEN winner_team_id IS NOT NULL AND 
-                                                       (winner_team_id = team1_id AND t1.player1_id = %s OR t1.player2_id = %s OR 
-                                                        winner_team_id = team2_id AND t2.player1_id = %s OR t2.player2_id = %s)
-                                                   THEN 1 END) as total_games_won,
-                                        COUNT(CASE WHEN winner_team_id IS NOT NULL AND 
-                                                       (winner_team_id = team1_id AND t1.player1_id = %s OR t1.player2_id = %s OR 
-                                                        winner_team_id = team2_id AND t2.player1_id = %s OR t2.player2_id = %s)
-                                                   THEN 1 END) as total_games_lost,
-                                        MAX(game_end_time) as last_game_played
-                                FROM games
-                                JOIN teams AS t1 ON games.team1_id = t1.team_id
-                                JOIN teams AS t2 ON games.team2_id = t2.team_id
-                                WHERE games.session_id = %s""",
-                            (player[0], player[0], player[0], player[0], player[0], player[0], player[0], player[0], session_id))
-                games_info = cur.fetchone()
-
-                print(f"Player: {player[1]}")
-                print(f"Total games played: {games_info[0]}")
-                print(f"Total games won: {games_info[1]}")
-                print(f"Total games lost: {games_info[2]}")
-                print(f"Last game played: {games_info[3]}")
+            # Print results in tabular format
+            print (" ")
+            print("\033[4m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
+                "", "", "", "", "", "", ""
+            ))
+            print("\033[1m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
+                "Player", "Games Played", "Games Won", "Games Lost", "Win Percentage", "Mins, Last Game", "Rank"
+            ))
+            print("\033[4m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
+                "", "", "", "", "", "", ""
+            ))
+            for stats in player_stats:
+                print("{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}".format(*stats))

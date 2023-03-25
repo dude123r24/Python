@@ -132,6 +132,21 @@ def get_session_id(club_id, season_id):
                 return None
 
 
+def get_games_played_last_session_id(club_id):
+    with get_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute("""
+                SELECT MAX(g.session_id) 
+                FROM games g 
+                JOIN sessions s ON g.session_id = s.id 
+                WHERE s.club_id = %s
+            """, (club_id,))
+            last_session = cur.fetchone()[0]
+            return last_session
+
+
+
+
 '''
 Add error handling: In some of your functions, such as create_session, you could add additional error handling to ensure that the function works as intended, even if unexpected errors occur.
 Refactor code: You could refactor some of your code to reduce duplication and improve readability. For example, the display_club_players_playing_today and display_club_players_not_playing_today functions share some common functionality. You could consider creating a separate function to handle this functionality and call it from both functions.

@@ -76,7 +76,7 @@ def main():
             elif choice == 4:
                 report_session_games_played(club_id, session_id)
             elif choice == 5:
-                report_session_no_of_games_per_player(club_id, season_id, session_id)
+                report_session_no_of_games_per_player(club_id, season_id)
             elif choice == 6:
                 report_session_player_games_played(club_id, session_id)
             elif choice == 7:
