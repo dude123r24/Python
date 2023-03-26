@@ -6,7 +6,7 @@ import random
 from tabulate import tabulate
 from datetime import datetime, timedelta
 from db import get_connection, get_cursor
-from utils import print_seperator_tilda, print_seperator_star, print_error, print_info
+from utils import print_seperator_tilda, print_seperator_star, print_error, print_info, print_table_header_seperator
 from players import get_player_name, display_player_stats, update_player_stats
 from sessions import get_session_id, get_games_played_last_session_id
 
@@ -357,14 +357,12 @@ def report_session_no_of_games_per_player(club_id, season_id):
 
             # Print results in tabular format
             print (" ")
-            print("\033[4m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
-                "", "", "", "", "", "", ""
-            ))
-            print("\033[1m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
+            print_table_header_seperator(120)
+            print("\033[1m{:<20} {:<15} {:<15} {:<15} {:<20} {:<20} {:<20}\033[0m".format(
                 "Player", "Games Played", "Games Won", "Games Lost", "Win Percentage", "Mins, Last Game", "Rank"
             ))
-            print("\033[4m{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}\033[0m".format(
-                "", "", "", "", "", "", ""
-            ))
+            print_table_header_seperator(120)
+
+
             for stats in player_stats:
-                print("{:<20} {:<20} {:<20} {:<20} {:<20} {:<20} {:<20}".format(*stats))
+                print("{:<20} {:<15} {:<15} {:<15} {:<20} {:<20} {:<20}".format(*stats))
