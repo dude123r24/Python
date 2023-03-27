@@ -1,7 +1,7 @@
 # db.py
 import psycopg2
 from contextlib import contextmanager
-from config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+from config_gcp import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
 @contextmanager
 def get_connection():

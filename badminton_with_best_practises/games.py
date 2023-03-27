@@ -260,7 +260,6 @@ def update_player_stats(player_id: int, result: str):
     if result not in ['win', 'lose']:
         print_error("Cannot update player stats. Result should be 'win' or 'lose'.")
         return
-    
     with get_connection() as conn:
         with get_cursor(conn) as cur:
             try:
@@ -293,7 +292,6 @@ def update_player_stats(player_id: int, result: str):
 
 
 
-
 def get_ongoing_games(session_id):
     with get_connection() as conn:
         with get_cursor(conn) as cur:
@@ -322,12 +320,13 @@ def get_ongoing_games(session_id):
             print(" ")
             return games
 
+
 def report_session_games_played(club_id, session_id):
     pass
 
+
 def set_options(club_id):
     pass
-
 
 
 def report_session_no_of_games_per_player(club_id, season_id):
@@ -365,4 +364,5 @@ def report_session_no_of_games_per_player(club_id, season_id):
 
 
             for stats in player_stats:
+                #print (f"Stats: {stats}")
                 print("{:<20} {:<15} {:<15} {:<15} {:<20} {:<20} {:<20}".format(*stats))

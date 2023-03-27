@@ -31,17 +31,21 @@ def main():
 
         if not club_input:
             print("No club selected. Exiting now.")
-            break
+            sys.exit()
 
         try:
             club_id = int(club_input)
             club_name = set_club(club_id)
+            if not club_name:
+                continue  # go back to the start of the loop
         except ValueError:
             print("Invalid club ID. Please enter a valid club ID.")
             continue
         except ClubNotFoundError:
             print("Club not found. Please enter a valid club ID.")
             continue
+
+
 
         # Get active season for club
         season_id = get_season(club_id)

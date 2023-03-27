@@ -5,7 +5,7 @@ from db import get_connection, get_cursor
 from players import display_club_players, display_club_players_not_playing_today, display_club_players_playing_today
 from psycopg2.errors import UniqueViolation
 from utils import print_error, print_seperator_plus
-from seasons import get_season
+from seasons import get_season, create_new_season
 
 
 # Select which players are playing in today's session

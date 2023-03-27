@@ -22,7 +22,6 @@ def get_season(club_id):
 
 
 def create_new_season(club_id):
-    print("No active season found for the club. Please create a new season.")
     date_from = input("Enter season start date (YYYY-MM-DD): ")
     date_to = input("Enter season end date (YYYY-MM-DD): ")
 
