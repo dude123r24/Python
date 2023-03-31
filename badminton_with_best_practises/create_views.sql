@@ -25,44 +25,39 @@ FROM games g
 GROUP BY g.id, g.session_id, s.season_id, s.club_id, g.team1_id, g.team2_id, g.team1_score, g.team2_score, g.winner_team_id;
 
 
-CREATE OR REPLACE VIEW player_stats_by_session AS
-SELECT
-    sp.session_id,
+CREATE OR REPLACE VIEW player_stats_by_session
+AS SELECT sp.session_id,
     sp.player_id,
     p.name AS player_name,
     sp.played AS games_played,
     sp.won,
+    sp.draw,
     sp.played - sp.won - sp.draw AS lost,
-    round((sp.won * 100.0) / sp.played, 2) AS win_percentage,
-    round(EXTRACT(EPOCH FROM (NOW() - g.game_end_time)) / 60) AS minutes_since_last_game,
-    DENSE_RANK() OVER (PARTITION BY sp.session_id ORDER BY sp.win_percentage DESC, sp.played DESC) AS session_rank
-FROM
-    sessions_players sp
-JOIN players p ON p.id = sp.player_id
-LEFT JOIN (
-    SELECT
-        gv.session_id,
-        unnest(array_cat(gv.team_1_player_ids, gv.team_2_player_ids)) AS player_id,
-        MAX(gv.game_end_time) AS game_end_time
-    FROM
-        games_view gv
-    WHERE
-        gv.game_end_time IS NOT NULL
-    GROUP BY
-        gv.session_id,
-        unnest(array_cat(gv.team_1_player_ids, gv.team_2_player_ids))
-) g ON g.session_id = sp.session_id AND g.player_id = sp.player_id;
+    round(sp.won::numeric * 100.0 / NULLIF(sp.played::numeric, 0), 2) AS win_percentage,
+    round(EXTRACT(epoch FROM now() - g.game_end_time::timestamp with time zone) / 60::numeric) AS minutes_since_last_game,
+    dense_rank() OVER (PARTITION BY sp.session_id ORDER BY round(sp.won::numeric * 100.0 / NULLIF(sp.played::numeric, 0), 2) DESC, sp.played DESC) AS session_rank
+   FROM sessions_players sp
+     JOIN players p ON p.id = sp.player_id
+     LEFT JOIN ( SELECT gv.session_id,
+            unnest(array_cat(gv.team_1_player_ids, gv.team_2_player_ids)) AS player_id,
+            max(gv.game_end_time) AS game_end_time
+           FROM games_view gv
+          WHERE gv.game_end_time IS NOT NULL
+          GROUP BY gv.session_id, (unnest(array_cat(gv.team_1_player_ids, gv.team_2_player_ids)))) g ON g.session_id = sp.session_id AND g.player_id = sp.player_id;
 
-CREATE VIEW season_player_stats AS
+
+
+
+CREATE VIEW player_stats_by_season AS
 SELECT
     s.season_id,
     sp.player_id,
-    p.name,
-    SUM(sp.played) AS played,
+    p.name AS player_name,
+    SUM(sp.played) AS games_played,
     SUM(sp.won) AS won,
     SUM(sp.draw) AS draw,
-    ROUND(100.0 * SUM(sp.won) / SUM(sp.played), 2) AS win_percentage,
-    RANK() OVER (PARTITION BY s.season_id ORDER BY ROUND(100.0 * SUM(sp.won) / SUM(sp.played), 2) DESC) AS season_rank
+    ROUND(100.0 * SUM(sp.won) / NULLIF(SUM(sp.played), 0), 2) AS win_percentage,
+    RANK() OVER (PARTITION BY s.season_id ORDER BY ROUND(100.0 * SUM(sp.won) / NULLIF(SUM(sp.played), 0), 2) DESC,  SUM(sp.played) DESC) AS season_rank
 FROM
     sessions_players sp
 JOIN players p ON sp.player_id = p.id
@@ -72,7 +67,8 @@ GROUP BY
     sp.player_id,
     p.name;
 
-CREATE VIEW club_player_stats AS
+
+CREATE VIEW player_stats_by_club AS
 SELECT
     s.club_id,
     sp.player_id,
@@ -80,8 +76,8 @@ SELECT
     SUM(sp.played) AS played,
     SUM(sp.won) AS won,
     SUM(sp.draw) AS draw,
-    ROUND(100.0 * SUM(sp.won) / SUM(sp.played), 2) AS win_percentage,
-    RANK() OVER (PARTITION BY s.club_id ORDER BY ROUND(100.0 * SUM(sp.won) / SUM(sp.played), 2) DESC) AS club_rank
+    ROUND(100.0 * SUM(sp.won) / NULLIF(SUM(sp.played), 0), 2) AS win_percentage,
+    RANK() OVER (PARTITION BY s.club_id ORDER BY ROUND(100.0 * SUM(sp.won) / NULLIF(SUM(sp.played), 0), 2) DESC,  SUM(sp.played) DESC) AS club_rank
 FROM
     sessions_players sp
 JOIN players p ON sp.player_id = p.id

@@ -1,0 +1,3 @@
+- Rank is not working
+- Team selection still not giving equal number of games to players
+- 
