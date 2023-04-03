@@ -7,7 +7,8 @@ from clubs import display_clubs, set_club, display_club_owner_details
 from seasons import get_season, create_new_season
 from sessions import create_session, sessions_players_select, check_session_has_players
 from players import display_club_players, display_club_players_not_playing_today, display_club_players_playing_today
-from games import select_teams, end_game, report_session_games_played, report_session_no_of_games_per_player, set_options
+from games import select_teams, end_game, set_options
+from reports import report_session_no_of_games_per_player, report_session_games_played
 from utils import print_seperator_tilda, print_title
 
 def main():

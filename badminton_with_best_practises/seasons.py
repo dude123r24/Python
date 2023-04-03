@@ -10,15 +10,18 @@ def get_season(club_id):
 
     with get_connection() as conn:
         with get_cursor(conn) as cur:
-
             cur.execute("""SELECT id FROM seasons WHERE club_id = %s
                            AND %s BETWEEN date_from AND date_to""",
                         (club_id, now.date()))
             season_id = cur.fetchone()
-            return season_id
 
-    print_error("No active season found for the club.")
-    create_new_season(club_id)
+            if season_id:
+                return season_id[0]  # Return the first element of the tuple
+            else:
+                print_error("No active season found for the club.")
+                season_id = create_new_season(club_id)
+                return season_id
+
 
 
 def create_new_season(club_id):

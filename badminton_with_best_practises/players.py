@@ -2,6 +2,7 @@
 from db import get_connection, get_cursor
 from utils import print_seperator_tilda, print_error, print_info
 
+
 def display_club_players(club_id):
     with get_connection() as conn:
         with get_cursor(conn) as cur:
@@ -85,42 +86,3 @@ def get_player_name(player_id):
             else:
                 print_error("Player not found.")
                 return None
-
-
-# players.py
-
-from db import get_connection, get_cursor
-from utils import print_seperator_tilda
-
-def update_player_stats(player_id, played, won, draw):
-    with get_connection() as conn:
-        with get_cursor(conn) as cur:
-            cur.execute("""UPDATE players SET played = played + %s, won = won + %s, draw = draw + %s
-                           WHERE id = %s""",
-                        (played, won, draw, player_id))
-            conn.commit()
-
-def display_player_stats(player_id):
-    with get_connection() as conn:
-        with get_cursor(conn) as cur:
-            cur.execute("""SELECT name, played, won, draw,
-                           CASE WHEN played = 0 THEN 0 ELSE round(won * 100.0 / played, 2) END as win_percentage
-                           FROM players WHERE id = %s""",
-                        (player_id,))
-            player = cur.fetchone()
-
-            if not player:
-                print(f"Player with ID {player_id} not found.")
-                return
-
-            print (" ")
-            print_seperator_tilda()
-            print(f"Player: {player[0]}")
-            print(f"Played: {player[1]}")
-            print(f"Won: {player[2]}")
-            print(f"Draw: {player[3]}")
-            print(f"Win percentage: {player[4]}%")
-            print_seperator_tilda()
-            print (" ")
-
-
