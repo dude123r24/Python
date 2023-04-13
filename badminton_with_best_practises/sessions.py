@@ -4,9 +4,58 @@ from datetime import datetime, date
 from db import get_connection, get_cursor
 from players import display_club_players, display_club_players_not_playing_today, display_club_players_playing_today
 from psycopg2.errors import UniqueViolation
-from utils import print_error, print_seperator_plus
+from utils import print_error, print_seperator_plus, print_info
 from seasons import get_season, create_new_season
 
+
+
+
+def end_session_for_player(club_id, session_id):
+    while True:
+        players_playing_today = display_club_players_playing_today(club_id, session_id)
+        if not players_playing_today:
+            print_error("No players are playing today.")
+            return
+
+        print (" ")
+        print("Select a player ID to end their session or press ENTER to finish:")
+        user_input = input()
+        if user_input.strip() == "":
+            break
+
+        try:
+            player_id = int(user_input)
+        except ValueError:
+            print_error("Invalid input. Please enter a valid player ID or press ENTER to return.")
+            continue
+
+        if not any(player[0] == player_id for player in players_playing_today):
+            print_error("Invalid player ID. Please select a player ID from the list.")
+            continue
+
+        with get_connection() as conn:
+            with get_cursor(conn) as cur:
+                cur.execute("""SELECT COUNT(*)
+                               FROM games
+                               WHERE session_id = %s
+                                 AND (team1_id IN (SELECT team_id FROM teams_players WHERE player_id = %s) OR
+                                      team2_id IN (SELECT team_id FROM teams_players WHERE player_id = %s))
+                                 AND winner_team_id IS NULL""",
+                            (session_id, player_id, player_id))
+                ongoing_games_count = cur.fetchone()[0]
+
+                if ongoing_games_count > 0:
+                    print_error(f"Player {player_id} is currently involved in ongoing games. Please finish the games before ending the session for the player.")
+                    return None
+
+                cur.execute("""UPDATE sessions_players
+                               SET active = 'N'
+                               WHERE session_id = %s AND player_id = %s""",
+                            (session_id, player_id))
+                conn.commit()
+
+        print_info(f"Player {player_id} has been removed from the session.")
+        break
 
 # Select which players are playing in today's session
 def sessions_players_select(club_id, season_id, session_id):
@@ -19,7 +68,8 @@ def sessions_players_select(club_id, season_id, session_id):
     playing_today = []
     while True:
         player_id = input("Enter player ID (or '0' to finish): ")
-
+        if player_id.strip() == "":
+            break
         if player_id.lower() == '0':
             break
 
@@ -65,7 +115,6 @@ def sessions_players_select(club_id, season_id, session_id):
         print(f"{player_id}. {player[1]}")
 
 
-# Create a session
 # Create a session
 def create_session(club_id):
     now = datetime.now()

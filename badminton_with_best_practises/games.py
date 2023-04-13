@@ -351,7 +351,7 @@ def update_player_stats(player_id: int, session_id: int, result: str):
                 conn.rollback()
             else:
                 conn.commit()
-                print(f"Player stats for player id {player_id} in session {session_id} updated successfully.")
+                #print(f"Player stats for player id {player_id} in session {session_id} updated successfully.")
 
 
 
